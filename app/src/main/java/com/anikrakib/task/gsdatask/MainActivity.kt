@@ -1,12 +1,17 @@
 package com.anikrakib.task.gsdatask
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import android.database.Cursor
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.MediaStore
+import android.view.MotionEvent
+import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -15,26 +20,55 @@ import androidx.databinding.DataBindingUtil
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.anikrakib.task.gsdatask.databinding.ActivityMainBinding
+import kotlinx.android.synthetic.main.activity_main.*
 import java.util.*
 import kotlin.collections.ArrayList
 import kotlin.math.pow
+import kotlinx.android.synthetic.main.custom_control.view.*
+import android.widget.SeekBar
+import android.widget.SeekBar.OnSeekBarChangeListener
 
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), View.OnClickListener, VideoAdapter.OnItemClickListener {
     private var activityMainBinding: ActivityMainBinding? = null
     var videoList = ArrayList<VideoModel>()
     private lateinit var videoAdapter: VideoAdapter
     private val REQUEST_CODE_PERMISSION = 123
     private val dirName = "Download"
+    var isPause = true
 
 
+    @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         activityMainBinding = DataBindingUtil.setContentView(this, R.layout.activity_main)
 
+        activityMainBinding?.videoView.apply {
+            customControl.apply {
+                videoView_rewind.setOnClickListener(this@MainActivity)
+                videoView_forward.setOnClickListener(this@MainActivity)
+                videoView_play_pause_btn.setOnClickListener(this@MainActivity)
+            }
+            videoView.setOnClickListener(this@MainActivity)
+            videoView.setOnClickListener {
+                hideCustomControl()
+            }
+        }
+
+        hideCustomControl()
         permission()
         loadVideos()
+        /*initializeSeekBars()
+        setHandler()*/
+    }
 
+    private fun hideCustomControl() {
+        Handler(Looper.getMainLooper()).postDelayed(
+            {
+                hideDefaultControls()
+            }, 5000
+        )
+        showDefaultControls()
     }
 
     private fun permission() {
@@ -73,9 +107,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun loadVideos() {
-        videoList = getallVideoFromFolder(this)
+        videoList = getAllVideoFromFolder(this)
         if (videoList.size > 0) {
-            videoAdapter = VideoAdapter(videoList, applicationContext)
+            videoAdapter =
+                VideoAdapter(videoList, applicationContext, this)
             activityMainBinding!!.videoRecyclerView.apply {
                 setHasFixedSize(true)
                 setItemViewCacheSize(20)
@@ -91,7 +126,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun getallVideoFromFolder(context: Context): ArrayList<VideoModel> {
+    private fun getAllVideoFromFolder(context: Context): ArrayList<VideoModel> {
         val list: ArrayList<VideoModel> = ArrayList()
         val uri: Uri = MediaStore.Video.Media.EXTERNAL_CONTENT_URI
         val orderBy = MediaStore.Video.Media.DATE_ADDED + " DESC"
@@ -126,7 +161,7 @@ class MainActivity : AppCompatActivity() {
             val widthHeight: String = cursor.getString(8)
 
             //this method convert 1204 in 1MB
-            var convertSize: String? = null
+            var convertSize: String?
             convertSize = if (size < 1024) {
                 java.lang.String.format(context.getString(R.string.size_in_b), size.toDouble())
             } else if (size < 1024.0.pow(2.0)) {
@@ -147,27 +182,26 @@ class MainActivity : AppCompatActivity() {
             }
 
             //this method convert any random video duration like 1331533132 into 1:21:12
-            var duration_formatted: String
+            var durationFormatted: String
             val sec = duration / 1000 % 60
             val min = duration / (1000 * 60) % 60
             val hrs = duration / (1000 * 60 * 60)
-            if (hrs == 0) {
-                duration_formatted =
-                    min.toString() + ":" + java.lang.String.format(Locale.UK, "%02d", sec)
+            durationFormatted = if (hrs == 0) {
+                min.toString() + ":" + java.lang.String.format(Locale.UK, "%02d", sec)
             } else {
-                duration_formatted =
-                    "$hrs:" + java.lang.String.format(
-                        Locale.UK,
-                        "%02d",
-                        min
-                    ) + ":" + java.lang.String.format(Locale.UK, "%02d", sec)
+                "$hrs:" + java.lang.String.format(
+                    Locale.UK,
+                    "%02d",
+                    min
+                ) + ":" + java.lang.String.format(Locale.UK, "%02d", sec)
             }
             val files = VideoModel(
+                id.toInt(),
                 path,
                 title,
                 convertSize,
                 resolution,
-                duration_formatted,
+                durationFormatted,
                 disName,
                 widthHeight
             )
@@ -175,6 +209,122 @@ class MainActivity : AppCompatActivity() {
         }
         cursor.close()
         return list
+    }
+
+    private fun hideDefaultControls() {
+        activityMainBinding?.customControl?.apply {
+            videoViewOneLayout.visibility = View.GONE
+            videoViewTwoLayout.visibility = View.GONE
+            videoViewThreeLayout.visibility = View.GONE
+        }
+    }
+
+    private fun showDefaultControls() {
+        activityMainBinding?.customControl?.apply {
+            videoViewOneLayout.visibility = View.VISIBLE
+            videoViewTwoLayout.visibility = View.VISIBLE
+            videoViewThreeLayout.visibility = View.VISIBLE
+        }
+    }
+
+    @SuppressLint("UseCompatLoadingForDrawables")
+    override fun onClick(view: View?) {
+        when (view?.id) {
+            R.id.videoView_rewind -> {
+                videoView.seekTo(videoView.currentPosition - 10000)
+            }
+            R.id.videoView_forward -> {
+                videoView.seekTo(videoView.currentPosition + 10000)
+            }
+            R.id.videoView_play_pause_btn -> {
+                if (videoView.isPlaying) {
+                    videoView.pause()
+                    isPause = true
+                    activityMainBinding?.customControl?.videoView_play_pause_btn?.setImageResource(R.drawable.ic_baseline_play_arrow)
+                } else {
+                    videoView.start()
+                    isPause = false
+                    activityMainBinding?.customControl?.videoView_play_pause_btn?.setImageResource(R.drawable.ic_baseline_pause)
+                }
+            }
+        }
+    }
+
+    @SuppressLint("NotifyDataSetChanged")
+    override fun onClick(position: Int) {
+        activityMainBinding?.customControl?.apply {
+            videoView.setVideoPath(videoList[position].path)
+            videoView.setOnPreparedListener {
+                videoView_seekbar?.max = videoView.getDuration();
+                videoView.start()
+                isPause = false
+                videoView_play_pause_btn.setImageResource(R.drawable.ic_baseline_pause)
+            }
+            videoView_title.text = videoList[position].title
+        }
+        initializeSeekBars()
+        setHandler()
+        hideCustomControl()
+    }
+
+    private fun initializeSeekBars() {
+        activityMainBinding!!.customControl.apply {
+            videoView_seekbar.setOnSeekBarChangeListener(object : OnSeekBarChangeListener {
+                @SuppressLint("SetTextI18n")
+                override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
+                    if (videoView_seekbar.id == R.id.videoView_seekbar) {
+                        if (fromUser) {
+                            videoView.seekTo(progress)
+                            if (isPause) {
+                                videoView.pause()
+                            } else {
+                                videoView.start()
+                            }
+                            val currentPosition = videoView.currentPosition
+                            videoView_endtime.text =
+                                "" + convertIntoTime(videoView.duration - currentPosition)
+                        }
+                    }
+                }
+
+                override fun onStartTrackingTouch(seekBar: SeekBar) {}
+                override fun onStopTrackingTouch(seekBar: SeekBar) {}
+            })
+        }
+    }
+
+    private fun convertIntoTime(ms: Int): String {
+        val time: String
+        val seconds: Int
+        val minutes: Int
+        val hours: Int
+        var x: Int = ms / 1000
+        seconds = x % 60
+        x /= 60
+        minutes = x % 60
+        x /= 60
+        hours = x % 24
+        time = if (hours != 0) String.format("%02d", hours) + ":" + String.format(
+            "%02d",
+            minutes
+        ) + ":" + String.format("%02d", seconds) else String.format(
+            "%02d",
+            minutes
+        ) + ":" + String.format("%02d", seconds)
+        return time
+    }
+
+    @SuppressLint("SetTextI18n")
+    private fun setHandler() {
+        Handler(Looper.getMainLooper()).postDelayed({
+            if (videoView.duration > 0) {
+                val currentPosition = videoView.currentPosition
+                activityMainBinding?.customControl?.videoView_seekbar?.progress =
+                    currentPosition
+                activityMainBinding?.customControl?.videoView_endtime?.text =
+                    "" + convertIntoTime(videoView.duration - currentPosition)
+            }
+        }, 500)
     }
 
 }

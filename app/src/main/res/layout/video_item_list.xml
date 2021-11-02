@@ -4,6 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/videoItemLayout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
 
@@ -22,9 +23,9 @@
                 android:id="@+id/thumbnail"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
+                android:contentDescription="@string/video_thumbnail"
                 android:scaleType="centerCrop"
-                android:src="@mipmap/ic_launcher"
-                android:contentDescription="@string/video_thumbnail" />
+                android:src="@mipmap/ic_launcher" />
 
             <TextView
                 android:id="@+id/video_duration"
